@@ -14,16 +14,16 @@ whos background
 figure(1); imshow(background); title('background');
 %% read image to detect (frame number n)
 % number of frame to detect
-n = 67;
-v2 = VideoReader('data/tennis-video.mp4');
+n = 100;
+v2 = VideoReader('data/background-video.mp4');
 % read all the frames
 frames = read(v1,[1 Inf]); % 4D array
 % take one image (the n-th frame) and show
 img = frames(:,:,:,n);
 figure(2); imshow(img); title('img');
 %% select color
-% take 1-st frame to get color of the ball
-init_frame = frames(:,:,:,1);
+% take 100-th frame to get color of the ball
+init_frame = frames(:,:,:,100);
 % take points
 figure(3); imshow(init_frame); title('select as many points in the ball as you can');
 hold on;
@@ -55,7 +55,7 @@ green_std = std(double(init_frame(:,:,2)),0,'all');
 % compute blue standard deviation:
 blue_std = std(double(init_frame(:,:,3)),0,'all');
 % decide percentage of std to use
-k = 1;
+k = 1.25;
 % compute bounding box boundaries
 red_min = max(0, color(1) - k*red_std);
 red_max = min(255, color(1) + k*red_std);
@@ -73,6 +73,14 @@ figure(3);
 % img)
 imshow(bsxfun(@times, img, cast(color_mask,class(img))));
 title('Image filtered by color');
+%% add morphological operations to color_mask
+se = strel('square',3); % take a 3x3 morphological element
+%mask_morph=imopen(color_mask,se);
+color_mask=imclose(color_mask,se); % dilation + erosion
+% show result
+figure(3);
+imshow(bsxfun(@times, img, cast(color_mask,class(img))));
+title('Image filtered by color morph transformed');
 %% filter by background subtraction (gray images - not sure it works)
 % subtract the background
 diff = abs(im2double(rgb2gray(img)) - im2double(rgb2gray(background)));
