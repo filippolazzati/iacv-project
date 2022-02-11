@@ -3,7 +3,7 @@ clear;
 clc;
 %% read video and compute background
 % open the video
-v1 = VideoReader('data/background-video.mp4'); % 405 frames, 720x1280
+v1 = VideoReader('data/tennis-video.mp4'); % 405 frames, 720x1280
 % read all the frames
 frames = read(v1,[1 Inf]); % 4D array
 % compute the background (median of all the frames)
