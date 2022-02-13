@@ -4,60 +4,68 @@ clc;
 addpath(genpath('functions'));
 %% read video and compute background
 % open the video
-v1 = VideoReader('mydata/s20fe.mp4'); % 405 frames, 720x1280
+v1 = VideoReader('data/video2_Trim.mp4'); % 405 frames, 720x1280
 % read all the frames
 frames = read(v1, [1 Inf]); % 4D array
 background = median(frames, 4);
 background_g = rgb2gray(background);
 
 %%
-Se = strel('square', 1);
-Se2 = strel('disk', 15);
-S1 = strel('disk', 2);
-hollow = ones(10);
-hollow(2:9, 2:9) = 0;
+Se = strel('disk', 10);
+S1 = strel('square', 2);
+hollow = ones(20);
+hollow(2:19, 2:19) = 0;
 S2 = strel('arbitrary', hollow);
-nframe = 6;
+init_frame = 9;
 n_frame_diff = 2;
+n_frame_diff2 = 1;
 mask_thresh = 30;
+
+nframe = init_frame;
+pts = nan(size(frames, 4)-nframe, 2);
 while nframe < size(frames, 4)
+    j = nframe - init_frame + 1;
     f = frames(:,:,:,nframe);
     f_g = rgb2gray(f);
     f_prev_g = rgb2gray(frames(:,:,:,nframe-n_frame_diff));
+    f_prev2_g = rgb2gray(frames(:,:,:,nframe-n_frame_diff2));
 
-    bw_bg_sub = imdilate(imsubtract(f_g, background_g), Se);
-    bw_bg_sub = imclose(bw_bg_sub, Se2);
-    mask_bg_sub = immask(bw_bg_sub, bw_bg_sub > mask_thresh);
-    %fg = imbinarize(imdilate(rgb2gray(fg), se));
-    
-    %masked1 = bsxfun(@times, f_g, cast(f_bg_sub, 'like', f_g));
-    %figure; imshow(masked1); title('Background sub');
-    
-    bw_frame_diff = imdilate(imsubtract(f_g, f_prev_g), Se);
-    bw_frame_diff = imclose(bw_frame_diff, Se2);
-    mask_frame_diff = immask(bw_frame_diff, bw_frame_diff > mask_thresh);
-    %fg2 = imbinarize(imdilate(rgb2gray(fg2), se));
-    
-    %masked2 = bsxfun(@times, f_g, cast(f_frame_diff, 'like', f_g));
-    %figure; imshow(masked2); title('Diff');
-   
+    bw_bg_sub = imclose(imabsdiff(f_g, background_g), Se);
+    mask_bg_sub = bw_bg_sub > mask_thresh;
+    mask_bg_sub = mask_bg_sub & ~bwareaopen(mask_bg_sub, 50);
 
-    mask_and = mask_bg_sub .* mask_frame_diff;
+    mask_and = mask_bg_sub;
 
-    %masked3 = bsxfun(@times, f, cast(f_mask_and, 'like', f));
-    %figure; imshow(masked3); title('AND');
+    for df = [-8, -6, -4, +4, +6, +8]
+        bw_frame_diff = imclose(imabsdiff(f_g, f_prev_g), Se);
+        mask_frame_diff = bw_frame_diff > mask_thresh;
+        mask_frame_diff = mask_frame_diff & ~bwareaopen(mask_frame_diff, 50);
+        mask_and = mask_and & mask_frame_diff;
+    end
    
     mask_hit_miss = bwhitmiss(mask_and, S1, S2);
-
     mask_final = imdilate(mask_hit_miss, strel('disk', 4));
     
-    figure(1); imshow([f, imbin2rgb(mask_and)]);
-    props = regionprops(mask_final, 'BoundingBox');
+    figure(1); imshow(f); hold all;
+    props = regionprops(mask_final, 'BoundingBox', 'Centroid');
     bbx = vertcat(props.BoundingBox);
+    %ecc = vertcat(props.Eccentricity);
+    cc = vertcat(props.Centroid);
 
-    if size(bbx, 1) < 5
+    if (size(bbx, 1) > 0)
         for i = 1:size(bbx, 1)
-            rectangle('Position',[bbx(i,1),bbx(i,2),bbx(i,3),bbx(i,4)], 'EdgeColor','r','LineWidth',2);
+            if bbx(i,3) > 0 && bbx(i,4) > 0
+                rectangle('Position',[bbx(i,1),bbx(i,2),bbx(i,3),bbx(i,4)], 'EdgeColor','r','LineWidth',2);
+                pts(j, :) = cc(i,:);
+                %text(bbx(i,1), bbx(i,2) - 20, num2str(ecc(i)));
+            end
+        end
+    end
+
+    for p = 1:size(pts, 1)
+        pt = pts(p,:);
+        if not(isnan(pt(1)))
+            plot(pt(1), pt(2), '.', 'MarkerSize', 10, 'Color', 'green');
         end
     end
     
