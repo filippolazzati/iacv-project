@@ -4,49 +4,90 @@ clc;
 addpath(genpath('functions'));
 %% read video and compute background
 % open the video
-v1 = VideoReader('data/video2_Trim.mp4'); % 405 frames, 720x1280
+v1 = VideoReader('mydata/s20fe.mp4'); % 405 frames, 720x1280
 % read all the frames
 frames = read(v1, [1 Inf]); % 4D array
 background = median(frames, 4);
-background_g = rgb2gray(background);
+background_bw = rgb2gray(background);
 
 %%
-Se = strel('disk', 10);
-S1 = strel('square', 2);
+Se = strel('disk', 5);
+S1 = strel('square', 1);
 hollow = ones(20);
 hollow(2:19, 2:19) = 0;
 S2 = strel('arbitrary', hollow);
 init_frame = 9;
-n_frame_diff = 2;
-n_frame_diff2 = 1;
-mask_thresh = 30;
+mask_thresh = 25;
+player_thresh = 15;
+
+F = [
+    1 0 1 0;
+    0 1 0 1;
+    0 0 1 0;
+    0 0 0 1
+];
+
+F_player = [
+    1 0 0 0;
+    0 1 0 0;
+    0 0 1 0;
+    0 0 0 1
+];
+
+n_particles = 2000;
+frame_width = size(frames, 2);
+frame_height = size(frames, 1);
+
+Xstd_pos = 20;
+Xstd_vel = 3;
+
+Xstd_measure = 20;
+
+window_semiwidth = ceil(frame_width / 2);
+window_semiheight = ceil(frame_height / 2);
+
+X = [
+    randi(frame_width, 1, n_particles);  % position X
+    randi(frame_height, 1, n_particles); % position Y
+    zeros(2, n_particles)                % velocity
+];
+
+w = ones(1, n_particles) ./ n_particles;
 
 nframe = init_frame;
 pts = nan(size(frames, 4)-nframe, 2);
 while nframe < size(frames, 4)
     j = nframe - init_frame + 1;
-    f = frames(:,:,:,nframe);
-    f_g = rgb2gray(f);
-    f_prev_g = rgb2gray(frames(:,:,:,nframe-n_frame_diff));
-    f_prev2_g = rgb2gray(frames(:,:,:,nframe-n_frame_diff2));
+    frame = frames(:,:,:,nframe);
+    frame_bw = rgb2gray(frame);
 
-    bw_bg_sub = imclose(imabsdiff(f_g, background_g), Se);
+    bw_bg_sub = imclose(imabsdiff(frame_bw, background_bw), Se);
     mask_bg_sub = bw_bg_sub > mask_thresh;
     mask_bg_sub = mask_bg_sub & ~bwareaopen(mask_bg_sub, 50);
 
     mask_and = mask_bg_sub;
 
     for df = [-8, -6, -4, +4, +6, +8]
-        bw_frame_diff = imclose(imabsdiff(f_g, f_prev_g), Se);
+        prev_frame_bw = rgb2gray(frames(:,:,:,nframe-df));
+        bw_frame_diff = imclose(imabsdiff(frame_bw, prev_frame_bw), Se);
         mask_frame_diff = bw_frame_diff > mask_thresh;
         mask_frame_diff = mask_frame_diff & ~bwareaopen(mask_frame_diff, 50);
         mask_and = mask_and & mask_frame_diff;
     end
    
-    mask_hit_miss = bwhitmiss(mask_and, S1, S2);
-    mask_final = imdilate(mask_hit_miss, strel('disk', 4));
-    
-    figure(1); imshow(f); hold all;
+    %mask_hit_miss = bwhitmiss(mask_and, S1, S2);
+    mask_final = imdilate(mask_and, strel('disk', 2));
+
+    figure(1);
+    %imshow(frame);
+    imshow([frame, gray2rgb(bw_bg_sub)]);
+    hold all;
+
+    %mask_players = bw_bg_sub > player_thresh;
+    %mask_players = bwareaopen(imclose(mask_players, strel('disk', 10)), 200);
+    %player_props = regionprops(mask_players, 'BoundingBox');
+    %player_bbx = vertcat(player_props.BoundingBox);
+
     props = regionprops(mask_final, 'BoundingBox', 'Centroid');
     bbx = vertcat(props.BoundingBox);
     %ecc = vertcat(props.Eccentricity);
@@ -61,15 +102,64 @@ while nframe < size(frames, 4)
             end
         end
     end
-
+    %{
     for p = 1:size(pts, 1)
         pt = pts(p,:);
         if not(isnan(pt(1)))
             plot(pt(1), pt(2), '.', 'MarkerSize', 10, 'Color', 'green');
         end
     end
+    %}
+
+    %%% PARTICLE FILTER %%%
+    X = F * X;
+    X(1:2,:) = X(1:2,:) + Xstd_pos * randn(2, n_particles);
+    X(3:4,:) = X(3:4,:) + Xstd_vel * randn(2, n_particles);
+
+    avg_pos_x = mean(X(1,:));
+    avg_pos_y = mean(X(2,:));
+
+    rectangle('Position',[ ...
+        avg_pos_x - window_semiwidth, ...
+        avg_pos_y - window_semiheight, ...
+        2 * window_semiwidth, ...
+        2 * window_semiheight ...
+    ], 'EdgeColor','r','LineWidth',2);
+
+    selected_cc = nan(1, 2);
+    if size(cc, 1) > 0
+        for c = 1:size(cc, 1)
+            if (cc(c, 1) > avg_pos_x - window_semiwidth && cc(c, 1) < avg_pos_x + window_semiwidth) && (cc(c, 2) > avg_pos_y - window_semiheight && cc(c, 2) < avg_pos_y + window_semiheight)
+                selected_cc = cc(c, :);
+                window_semiwidth = ceil(frame_width / 10);
+                window_semiheight = ceil(frame_height / 10);
+                break;
+            end
+        end
+    end
+
+    if ~isnan(selected_cc(1))
+        for p = 1:n_particles
+            w(p) = max(0, abs(selected_cc(1) - X(1, p)) + abs(selected_cc(2) - X(2, p)) + randn * Xstd_measure);
+        end
+        w = tanh(1 ./ w);
+        w = w ./ sum(w);
+        pdf = cumsum(w);
+        [~, ~, I] = histcounts(rand(1, n_particles), [0, pdf]);
+        X = X(:, I); % +1 to avoid zero index
+    end
+
+    predicted = mean(X, 2);
+
+    plot(X(1,:), X(2,:), '.', 'MarkerSize', 2, 'Color', 'green');
+
+    plot(predicted(1), predicted(2), '.', 'MarkerSize', 15, 'Color', 'yellow');
+    plot([predicted(1), predicted(1) + predicted(3) * 10], [predicted(2), predicted(2) + predicted(4) * 10], 'Color', 'yellow', 'LineWidth', 4);
     
+
     nframe = nframe + 1;
+
+    pause(0.2);
 end
 %%
 S = size(background);
@@ -202,4 +292,9 @@ end
 
 function res = immask(img, mask)
     res = bsxfun(@times, img, cast(mask,class(img)));
+end
+
+function r = in_rect(pos, rect)
+    r = pos(1) >= rect(1) && pos(1) <= rect(1) + rect(3) && ...
+        pos(2) >= rect(2) && pos(2) <= rect(2) + rect(4);
 end
