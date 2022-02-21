@@ -1,43 +1,44 @@
-clc 
-clear all
-close all
-%%
-
+close all;
+clear;
+clc;
+addpath(genpath('functions'));
+%% read video and compute background
 % open the video
-v1 = VideoReader('data/cetto.mp4'); % 405 frames, 720x1280
+v1 = VideoReader('../data/video2_Trim.mp4');
 % read all the frames
-frames = read(v1,[1 Inf]); % 4D array
-% returns the width and height of frames in video and number of coor planes
+frames = read(v1, [1 Inf]); % 4D array 720x1280x3x309 
+% median of first n frames
+n = 100;
+mean = median(frames(:, :, :, 1:n),4);
+%background_g = rgb2gray(background);
+figure(1);
+imshow(mean);
+%
 [height,width,N]= size(frames(:,:,:,1));
-
-% create avifile object to save results as video
- vidObj= VideoWriter('1deltafr with Th & cond.avi');
-
+%%
 % start stopwatch to measure time code needs to run
 tic
-
 % Variables
-    K= 3; % number of gaussian components (3-5)
-    M=3; %number of background components
-    alpha= 0.05; % learning rate % alpha =0.01
-    Thresh=0.25; % foreground threshold 0.25
-    var_init=900; % initial variance
-    rho= 0.03; % update coeff
+K= 3; % number of gaussian components (3-5)
+M=3; %number of background components (B?)
+alpha= 0.05; % learning rate % alpha =0.01
+Thresh=0.25; % foreground threshold 0.25
+var_init=900; % initial variance
+rho= 0.03; % update coeff
 
+w = nan(height,width,k);
+var = nan(height,width,k);
 % Initialize gaussian component means, standard deviation and weights
 % randomly
     for i=1:height
         for j=1:width
-            for k=1:K
-
-                mean(i,j,k) = rand*255;             % means random (0-255) 255=pixel range
+            for k=1:K         
                 w(i,j,k) = 1/K;                     % weights uniformly dist
                 var(i,j,k) = var_init;                  % initialize variance
-
             end
         end
     end
-    
+
 for z=1:size(frames, 4)
     
    % take the current frame and convert to grayscale
@@ -170,21 +171,96 @@ disp('1')
    newFrameOut= getframe;
    writeVideo(vidObj,newFrameOut);
 end
-close(vidObj);
-toc
-%Framepersecond= (numFrames/toc)
-%    figure(1),subplot(3,1,1),imshow(X_t)
-%     subplot(3,1,2),imshow(uint8(bg_bw))
-%     subplot(3,1,3),imshow(uint8(fg)) 
-%     
-%     Mov1(z)  = im2frame(uint8(fg),gray);           % put frames into movie
-%     %Mov2(z)  = im2frame(uint8(bg_bw),gray);           % put frames into movie
-%     
-% end
-%       
-% movie2avi(Mov1,'GMM1','fps',25);           % save movie as avi 
-% %movie2avi(Mov2,'MOG_background5','fps',25);           % save movie as avi 
+%%
+close all;
+clear;
+clc;
+addpath(genpath('functions'));
+%% read video and compute background
+% open the video
+v1 = VideoReader('../mydata/s20fe.mp4'); % 405 frames, 720x1280
+% read all the frames
+frames = read(v1, [1 Inf]); % 4D array
+background = median(frames, 4);
+background_g = rgb2gray(background);
+detector = vision.ForegroundDetector(...
+       'NumTrainingFrames', 50, ...
+       'NumGaussians', 5, ...
+       'MinimumBackgroundRatio', 0.7, ...
+       'InitialVariance', 400);
+%%
+Se = strel('disk', 10);
+S1 = strel('square', 2);
+hollow = ones(20);
+hollow(2:19, 2:19) = 0;
+S2 = strel('arbitrary', hollow);
+init_frame = 9;
+n_frame_diff = 2;
+n_frame_diff2 = 1;
+mask_thresh = 30;
+
+nframe = init_frame;
+pts = nan(size(frames, 4)-nframe, 2);
+while nframe < size(frames, 4)
+    j = nframe - init_frame + 1;
+    f = frames(:,:,:,nframe);
+    % background subtraction mask
+    mask_bg_sub2 = detector(f);
+    f_g = rgb2gray(f);
+    f_prev_g = rgb2gray(frames(:,:,:,nframe-n_frame_diff));
+    f_prev2_g = rgb2gray(frames(:,:,:,nframe-n_frame_diff2));
+
+    bw_bg_sub = imclose(imabsdiff(f_g, background_g), Se);
+    mask_bg_sub = bw_bg_sub > mask_thresh;
+    
+    mask_bg_sub = mask_bg_sub & ~bwareaopen(mask_bg_sub, 50);
+    mask_and = mask_bg_sub & mask_bg_sub2;
+
+    for df = [-8, -6, -4, +4, +6, +8]
+        bw_frame_diff = imclose(imabsdiff(f_g, f_prev_g), Se);
+        mask_frame_diff = bw_frame_diff > mask_thresh;
+        mask_frame_diff = mask_frame_diff & ~bwareaopen(mask_frame_diff, 50);
+        mask_and = mask_and & mask_frame_diff;
+    end
+    mask_hit_miss = bwhitmiss(mask_and, S1, S2);
+    mask_final = imdilate(mask_hit_miss, strel('disk', 4));
+
+    figure(1); imshow(f); hold all;
+    props = regionprops(mask_final, 'BoundingBox', 'Centroid');
+    bbx = vertcat(props.BoundingBox);
+    %ecc = vertcat(props.Eccentricity);
+    cc = vertcat(props.Centroid);
+
+    if (size(bbx, 1) > 0)
+        for i = 1:size(bbx, 1)
+            if bbx(i,3) > 0 && bbx(i,4) > 0
+                rectangle('Position',[bbx(i,1),bbx(i,2),bbx(i,3),bbx(i,4)], 'EdgeColor','r','LineWidth',2);
+                pts(j, :) = cc(i,:);
+                %text(bbx(i,1), bbx(i,2) - 20, num2str(ecc(i)));
+            end
+        end
+    end
+
+    for p = 1:size(pts, 1)
+        pt = pts(p,:);
+        if not(isnan(pt(1)))
+            plot(pt(1), pt(2), '.', 'MarkerSize', 10, 'Color', 'green');
+        end
+    end
+    
+    nframe = nframe + 1;
+end
 
 
-% stop stopwatch
-toc
+
+
+
+
+
+
+
+
+
+
+
+

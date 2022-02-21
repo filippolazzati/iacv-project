@@ -2,14 +2,14 @@ close all
 clear
 clc
 %%
-videoSource = VideoReader('data/background-video.mp4');
+videoSource = VideoReader('data/video2_Trim.mp4');
 detector = vision.ForegroundDetector(...
        'NumTrainingFrames', 5, ...
        'InitialVariance', 30*30);
 blob = vision.BlobAnalysis(...
        'CentroidOutputPort', false, 'AreaOutputPort', false, ...
        'BoundingBoxOutputPort', true, ...
-       'MinimumBlobAreaSource', 'Property', 'MinimumBlobArea', 250);
+       'MinimumBlobAreaSource', 'Property', 'MinimumBlobArea', 10);
 shapeInserter = vision.ShapeInserter('BorderColor','White');
 videoPlayer = vision.VideoPlayer();
 
