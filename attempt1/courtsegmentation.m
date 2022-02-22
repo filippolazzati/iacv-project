@@ -18,41 +18,6 @@ hollow(2:19, 2:19) = 0;
 S2 = strel('arbitrary', hollow);
 init_frame = 9;
 mask_thresh = 25;
-player_thresh = 15;
-
-F = [
-    1 0 1 0;
-    0 1 0 1;
-    0 0 1 0;
-    0 0 0 1
-];
-
-F_player = [
-    1 0 0 0;
-    0 1 0 0;
-    0 0 1 0;
-    0 0 0 1
-];
-
-n_particles = 2000;
-frame_width = size(frames, 2);
-frame_height = size(frames, 1);
-
-Xstd_pos = 20;
-Xstd_vel = 3;
-
-Xstd_measure = 20;
-
-window_semiwidth = ceil(frame_width / 2);
-window_semiheight = ceil(frame_height / 2);
-
-X = [
-    randi(frame_width, 1, n_particles);  % position X
-    randi(frame_height, 1, n_particles); % position Y
-    zeros(2, n_particles)                % velocity
-];
-
-w = ones(1, n_particles) ./ n_particles;
 
 nframe = init_frame;
 pts = nan(size(frames, 4)-nframe, 2);
@@ -83,14 +48,8 @@ while nframe < size(frames, 4)
     imshow([frame, gray2rgb(bw_bg_sub)]);
     hold all;
 
-    %mask_players = bw_bg_sub > player_thresh;
-    %mask_players = bwareaopen(imclose(mask_players, strel('disk', 10)), 200);
-    %player_props = regionprops(mask_players, 'BoundingBox');
-    %player_bbx = vertcat(player_props.BoundingBox);
-
     props = regionprops(mask_final, 'BoundingBox', 'Centroid');
     bbx = vertcat(props.BoundingBox);
-    %ecc = vertcat(props.Eccentricity);
     cc = vertcat(props.Centroid);
 
     if (size(bbx, 1) > 0)
@@ -102,64 +61,13 @@ while nframe < size(frames, 4)
             end
         end
     end
-    %{
     for p = 1:size(pts, 1)
         pt = pts(p,:);
         if not(isnan(pt(1)))
             plot(pt(1), pt(2), '.', 'MarkerSize', 10, 'Color', 'green');
         end
     end
-    %}
-
-    %%% PARTICLE FILTER %%%
-    X = F * X;
-    X(1:2,:) = X(1:2,:) + Xstd_pos * randn(2, n_particles);
-    X(3:4,:) = X(3:4,:) + Xstd_vel * randn(2, n_particles);
-
-    avg_pos_x = mean(X(1,:));
-    avg_pos_y = mean(X(2,:));
-
-    rectangle('Position',[ ...
-        avg_pos_x - window_semiwidth, ...
-        avg_pos_y - window_semiheight, ...
-        2 * window_semiwidth, ...
-        2 * window_semiheight ...
-    ], 'EdgeColor','r','LineWidth',2);
-
-    selected_cc = nan(1, 2);
-    if size(cc, 1) > 0
-        for c = 1:size(cc, 1)
-            if (cc(c, 1) > avg_pos_x - window_semiwidth && cc(c, 1) < avg_pos_x + window_semiwidth) && (cc(c, 2) > avg_pos_y - window_semiheight && cc(c, 2) < avg_pos_y + window_semiheight)
-                selected_cc = cc(c, :);
-                window_semiwidth = ceil(frame_width / 10);
-                window_semiheight = ceil(frame_height / 10);
-                break;
-            end
-        end
-    end
-
-    if ~isnan(selected_cc(1))
-        for p = 1:n_particles
-            w(p) = max(0, abs(selected_cc(1) - X(1, p)) + abs(selected_cc(2) - X(2, p)) + randn * Xstd_measure);
-        end
-        w = tanh(1 ./ w);
-        w = w ./ sum(w);
-        pdf = cumsum(w);
-        [~, ~, I] = histcounts(rand(1, n_particles), [0, pdf]);
-        X = X(:, I); % +1 to avoid zero index
-    end
-
-    predicted = mean(X, 2);
-
-    plot(X(1,:), X(2,:), '.', 'MarkerSize', 2, 'Color', 'green');
-
-    plot(predicted(1), predicted(2), '.', 'MarkerSize', 15, 'Color', 'yellow');
-    plot([predicted(1), predicted(1) + predicted(3) * 10], [predicted(2), predicted(2) + predicted(4) * 10], 'Color', 'yellow', 'LineWidth', 4);
-    
-
     nframe = nframe + 1;
-
-    pause(0.2);
 end
 %%
 S = size(background);
