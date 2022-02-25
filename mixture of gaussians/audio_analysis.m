@@ -44,3 +44,68 @@ samples = [1,2*sample_rate]; % read first 2 seconds since sample_rate = number o
 
 %% play audio
 sound(y, sample_rate);
+
+%% example of signals synchronization through xcorr
+n = 0:15;
+x = 0.84.^n;
+y = circshift(x,5);
+[c,lags] = xcorr(x,y);
+stem(lags,c)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% synchronize s20fe and note8
+% s20fe
+[y_s20fe, sample_rate_s20fe] = audioread('../mydata/s20fe.mp4');
+info_audio_s20fe = audioinfo('../mydata/s20fe.mp4');
+v_s20fe = VideoReader('../mydata/s20fe.mp4');
+frames_s20fe = read(v_s20fe,[1 Inf]);
+info_video_s20fe = info(vision.VideoFileReader('../mydata/s20fe.mp4'));
+
+% note8
+[y_note8, sample_rate_note8] = audioread('../mydata/note8.mp4');
+info_audio_note8 = audioinfo('../mydata/note8.mp4');
+v_note8 = VideoReader('../mydata/note8.mp4');
+frames_note8 = read(v_note8,[1 Inf]); % 1280x720x3x292
+info_video_note8 = info(vision.VideoFileReader('../mydata/note8.mp4'));
+
+sample_rate = sample_rate_s20fe; % it is the same
+frame_rate = info_video_s20fe.VideoFrameRate; % it is the same
+
+%% take first channel of both and print xcorr
+signal_s20fe = y_s20fe(:, 1);
+signal_note8 = y_note8(:, 1);
+
+[c,lags] = xcorr(signal_s20fe,signal_note8);
+% NBBBBBB: I do the abs(c) (NOT SURE ABOUT THIS)
+stem(lags,abs(c)) % show
+
+%% take the maximum
+[max_lag, index_max_lag] = max(abs(c)); % lag of maximum correlation
+
+shift_between_signals = lags(index_max_lag); % the two signals are shifted by this term
+% it is positive -> note8 è avanti rispetto a s20fe di
+% shift_between_signals (sample_rate è lo stesso)
+
+shift_in_seconds = shift_between_signals / sample_rate;
+
+shift_in_frames = round(frame_rate * shift_in_seconds);
+%% plot frames of the two videos synchronized
+n_frame = 173;
+
+figure(1), imshow(frames_s20fe(:,:,:,n_frame)), title('s20fe');
+figure(2), imshow(frames_note8(:,:,:,n_frame - shift_in_frames)), title('note8');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
