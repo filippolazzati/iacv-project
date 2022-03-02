@@ -4,7 +4,7 @@ clc;
 addpath(genpath('functions'));
 %% read video and compute background
 % open the video
-v1 = VideoReader('mydata/s20fe.mp4'); % 405 frames, 720x1280
+v1 = VideoReader('mydata/a20e.mp4'); % 405 frames, 720x1280
 % read all the frames
 frames = read(v1, [1 Inf]); % 4D array
 background = median(frames, 4);

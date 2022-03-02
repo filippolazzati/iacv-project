@@ -7,13 +7,13 @@ clc
 % and n is the number of audio channels in the file. % 467966x2
 
 % read audio
-[y, sample_rate] = audioread('../mydata/note8.mp4');
-info_audio = audioinfo('../mydata/note8.mp4');
+[y, sample_rate] = audioread('../stuff/note8.mp4');
+info_audio = audioinfo('../stuff/note8.mp4');
 
 % read video
-v1 = VideoReader('../mydata/note8.mp4');
+v1 = VideoReader('../stuff/note8.mp4');
 frames = read(v1,[1 Inf]); % 1280x720x3x292
-info_video = info(vision.VideoFileReader('../mydata/note8.mp4'));
+info_video = info(vision.VideoFileReader('../stuff/note8.mp4'));
 
 %% plot the channels by sampling instant
 line_value = 0.2;
@@ -28,7 +28,7 @@ audio_intensity = 0.3;
 ch1 = y(:, 1);
 indexes = find(ch1 > audio_intensity); % find peaks' indexes
 peaks_times = indexes / sample_rate; % peaks' instants
-peak_frames = unique(floor(peaks_times * info_video.VideoFrameRate), 'stable');
+peak_frames = unique(round(peaks_times * info_video.VideoFrameRate), 'stable');
 
 imgs = frames(:, :, :, peak_frames(1));
 for i = 2:size(peak_frames, 1)
@@ -55,21 +55,26 @@ stem(lags,c)
 
 %% synchronize s20fe and note8
 % s20fe
-[y_s20fe, sample_rate_s20fe] = audioread('../mydata/s20fe.mp4');
-info_audio_s20fe = audioinfo('../mydata/s20fe.mp4');
-v_s20fe = VideoReader('../mydata/s20fe.mp4');
+[y_s20fe, sample_rate_s20fe] = audioread('../stuff/s20fe.mp4');
+info_audio_s20fe = audioinfo('../stuff/s20fe.mp4');
+v_s20fe = VideoReader('../stuff/s20fe.mp4');
 frames_s20fe = read(v_s20fe,[1 Inf]);
-info_video_s20fe = info(vision.VideoFileReader('../mydata/s20fe.mp4'));
+info_video_s20fe = info(vision.VideoFileReader('../stuff/s20fe.mp4'));
 
 % note8
-[y_note8, sample_rate_note8] = audioread('../mydata/note8.mp4');
-info_audio_note8 = audioinfo('../mydata/note8.mp4');
-v_note8 = VideoReader('../mydata/note8.mp4');
+[y_note8, sample_rate_note8] = audioread('../stuff/note8.mp4');
+info_audio_note8 = audioinfo('../stuff/note8.mp4');
+v_note8 = VideoReader('../stuff/note8.mp4');
 frames_note8 = read(v_note8,[1 Inf]); % 1280x720x3x292
-info_video_note8 = info(vision.VideoFileReader('../mydata/note8.mp4'));
+info_video_note8 = info(vision.VideoFileReader('../stuff/note8.mp4'));
 
 sample_rate = sample_rate_s20fe; % it is the same
 frame_rate = info_video_s20fe.VideoFrameRate; % it is the same
+
+x1 = linspace(0, info_audio_s20fe.Duration, size(y_s20fe,1));
+figure(1); plot(x1, y_s20fe(:, 2)); title('S20');
+x2 = linspace(0, info_audio_note8.Duration, size(y_note8,1));
+figure(2); plot(x2, y_note8(:, 2)); title('Note8');
 
 %% take first channel of both and print xcorr
 signal_s20fe = y_s20fe(:, 1);
@@ -90,10 +95,10 @@ shift_in_seconds = shift_between_signals / sample_rate;
 
 shift_in_frames = round(frame_rate * shift_in_seconds);
 %% plot frames of the two videos synchronized
-n_frame = 173;
+n_frame = 174;
 
 figure(1), imshow(frames_s20fe(:,:,:,n_frame)), title('s20fe');
-figure(2), imshow(frames_note8(:,:,:,n_frame - shift_in_frames)), title('note8');
+figure(2), imshow(frames_note8(:,:,:,n_frame - shift_in_frames +4)), title('note8');
 
 
 
