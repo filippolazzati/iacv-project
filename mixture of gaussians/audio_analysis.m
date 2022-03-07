@@ -7,13 +7,15 @@ clc
 % and n is the number of audio channels in the file. % 467966x2
 
 % read audio
-[y, sample_rate] = audioread('../stuff/note8.mp4');
-info_audio = audioinfo('../stuff/note8.mp4');
+path = 'videos/note8.mp4';
+
+[y, sample_rate] = audioread('videos/note8.mp4');
+info_audio = audioinfo('videos/note8.mp4');
 
 % read video
-v1 = VideoReader('../stuff/note8.mp4');
+v1 = VideoReader('videos/note8.mp4');
 frames = read(v1,[1 Inf]); % 1280x720x3x292
-info_video = info(vision.VideoFileReader('../stuff/note8.mp4'));
+info_video = info(vision.VideoFileReader('videos/note8.mp4'));
 
 %% plot the channels by sampling instant
 line_value = 0.2;
@@ -55,22 +57,22 @@ stem(lags,c)
 
 %% synchronize s20fe and note8
 % s20fe
-[y_s20fe, sample_rate_s20fe] = audioread('../stuff/s20fe.mp4');
-info_audio_s20fe = audioinfo('../stuff/s20fe.mp4');
-v_s20fe = VideoReader('../stuff/s20fe.mp4');
+[y_s20fe, sample_rate_s20fe] = audioread('videos/s20fe.mp4');
+info_audio_s20fe = audioinfo('videos/s20fe.mp4');
+v_s20fe = VideoReader('videos/s20fe.mp4');
 frames_s20fe = read(v_s20fe,[1 Inf]);
-info_video_s20fe = info(vision.VideoFileReader('../stuff/s20fe.mp4'));
+info_video_s20fe = info(vision.VideoFileReader('videos/s20fe.mp4'));
 
 % note8
-[y_note8, sample_rate_note8] = audioread('../stuff/note8.mp4');
-info_audio_note8 = audioinfo('../stuff/note8.mp4');
-v_note8 = VideoReader('../stuff/note8.mp4');
+[y_note8, sample_rate_note8] = audioread('videos/note8.mp4');
+info_audio_note8 = audioinfo('videos/note8.mp4');
+v_note8 = VideoReader('videos/note8.mp4');
 frames_note8 = read(v_note8,[1 Inf]); % 1280x720x3x292
-info_video_note8 = info(vision.VideoFileReader('../stuff/note8.mp4'));
+info_video_note8 = info(vision.VideoFileReader('videos/note8.mp4'));
 
 sample_rate = sample_rate_s20fe; % it is the same
 frame_rate = info_video_s20fe.VideoFrameRate; % it is the same
-
+%%
 x1 = linspace(0, info_audio_s20fe.Duration, size(y_s20fe,1));
 figure(1); plot(x1, y_s20fe(:, 2)); title('S20');
 x2 = linspace(0, info_audio_note8.Duration, size(y_note8,1));
@@ -95,16 +97,19 @@ shift_in_seconds = shift_between_signals / sample_rate;
 
 shift_in_frames = round(frame_rate * shift_in_seconds);
 %% plot frames of the two videos synchronized
-n_frame = 174;
+n_frame = 248;
 
 figure(1), imshow(frames_s20fe(:,:,:,n_frame)), title('s20fe');
-figure(2), imshow(frames_note8(:,:,:,n_frame - shift_in_frames +4)), title('note8');
+figure(2), imshow(frames_note8(:,:,:,n_frame - shift_in_frames-2)), title('note8');
 
 
 
 
+%%
 
+s20fe_to_s20plus = +43; % aggiungere a nframe dell's20fe per avere quello del s20plus
 
+s20fe_to_note8 = +95;
 
 
 

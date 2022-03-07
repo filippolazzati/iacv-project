@@ -3,8 +3,9 @@ clear all
 clc
 
 %%
-params_s20fe = load("calibration data/s20fe/calibrationparams.mat");
-params_note8 = load("calibration data/note8/calibrationparams.mat");
+params_s20fe = load("calibration/params/note8.mat");
+params_note8 = load("calibration/params/s20fe.mat");
+params_s20plus = load("calibration/params/s20plus.mat");
 
 %%
 img_s20fe = imread('calibration data/s20fe_Moment.jpg');
@@ -27,6 +28,7 @@ pcshow([[0 0], zeros(size([0 0],1),1)], 'red','VerticalAxisDir', 'up', 'MarkerSi
 
 plotCamera('Location', params_s20fe.location, 'Orientation', params_s20fe.orientation, 'Size', 0.2, 'Color', [1,0,0]);
 plotCamera('Location', params_note8.location, 'Orientation', params_note8.orientation, 'Size', 0.2, 'Color', [0,1,0]);
+plotCamera('Location', params_s20plus.location, 'Orientation', params_s20plus.orientation, 'Size', 0.2, 'Color', [0,0,1]);
 
 fieldSegs = [
 %   x1     x2     y1     y2
@@ -51,7 +53,7 @@ fieldSegs = [
 
 plot(fieldSegs(:, 1:2).', fieldSegs(:, 3:4).', 'Color', 'b')
 
-plot3(wp(1), wp(2), wp(3), '.', 'MarkerSize', 30, 'Color', 'yellow');
+%plot3(wp(1), wp(2), wp(3), '.', 'MarkerSize', 30, 'Color', 'yellow');
 
 set(gcf,'color','w');
 set(gca,'color','w');
