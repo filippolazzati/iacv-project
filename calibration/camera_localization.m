@@ -2,10 +2,10 @@
 close all
 
 % Note8
-P1 = [5.485 5.49];
-P2 = [9.6 5.49];
-P3 = [9.6 11.89];
-P4 = [5.485 11.89];
+%P1 = [5.485 5.49];
+%P2 = [9.6 5.49];
+%P3 = [9.6 11.89];
+%P4 = [5.485 11.89];
 
 % S20fe
 %P1 = [5.485 5.49];
@@ -14,12 +14,12 @@ P4 = [5.485 11.89];
 %P4 = [5.485 11.89];
 
 % S20Plus
-%P1 = [10.97 2*11.89];
-%P2 = P1 - [1.37 0];
-%P3 = P2 - [0 11.89];
-%P4 = P1 - [0 11.89];
+P1 = [10.97 2*11.89];
+P2 = P1 - [1.37 0];
+P3 = P2 - [0 11.89];
+P4 = P1 - [0 11.89];
 
-v = VideoReader('videos/note8.mp4');
+v = VideoReader('videos/s20plus.mp4');
 frame = read(v, 1);
 
 imshow(frame);
@@ -33,3 +33,5 @@ hold off;
 
 orientation = rotationMatrix';
 location = -translationVector * orientation;
+
+cameraParams.ImageSize = size(frame, 1:2);

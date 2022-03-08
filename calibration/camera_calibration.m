@@ -3,7 +3,7 @@ clear
 clc
 %% detect checkerboard points
 n_images = 4;
-imds = imageDatastore('calibration/data/note8/*.jpg');
+imds = imageDatastore('calibration/data/s20plus/*.jpg');
 [imagePoints,boardSize,imagesUsed] = detectCheckerboardPoints(imds.Files(1:n_images), 'MinCornerMetric', 0.3, 'PartialDetections', false);
 
 for i = 1:n_images
@@ -22,5 +22,5 @@ worldPoints = generateCheckerboardPoints(boardSize,squareSizeInMM);
 
 %%
 figure;
-u = undistortImage(imread('calibration/data/note8/1.jpg'), cameraParams);
+u = undistortImage(imread('calibration/data/s20plus/1.jpg'), cameraParams);
 imshow(u);

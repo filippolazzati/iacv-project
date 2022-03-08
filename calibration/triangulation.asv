@@ -3,8 +3,8 @@ clear all
 clc
 
 %%
-params_s20fe = load("calibration/params/s20fe.mat");
-params_note8 = load("calibration/params/note8.mat");
+params_s20fe = load("calibration/params/note8.mat");
+params_note8 = load("calibration/params/s20fe.mat");
 params_s20plus = load("calibration/params/s20plus.mat");
 
 v_s20fe = VideoReader('videos/s20fe.mp4');
@@ -26,20 +26,21 @@ figure(3); imshow(img_s20plus); hold on; [x, y] = getpts();
 pts_s20plus = [x y];
 
 %%
-track = pointTrack([1; 2; 3], [pts_s20fe; pts_note8; pts_s20plus]);
+track = pointTrack([1 2], [pts_s20fe; pts_note8]);
 poses = table;
-poses.ViewId = uint32([1; 2; 3]);
-poses.Orientation = {params_s20fe.orientation; params_note8.orientation; params_s20plus.orientation};
-poses.Location = {params_s20fe.location; params_note8.location; params_s20plus.location};
-intrinsics = [params_s20fe.cameraParams.Intrinsics, params_note8.cameraParams.Intrinsics, params_s20plus.cameraParams.Intrinsics];
+poses.ViewId = uint32([1; 2]);
+poses.Orientation = {params_s20fe.orientation; params_note8.orientation};
+poses.Location = {params_s20fe.location; params_note8.location};
+%%
+intrinsics = [params_s20fe.cameraParams.Intrinsics, params_note8.cameraParams.Intrinsics];
+
 [wp, re] = triangulateMultiview(track, poses, intrinsics);
 
-%{
-[wp, re] = triangulate(pts_note8, pts_s20plus, ...
-    cameraMatrix(params_note8.cameraParams, params_note8.rotationMatrix, params_note8.translationVector), ...
-    cameraMatrix(params_s20plus.cameraParams, params_s20plus.rotationMatrix, params_s20plus.translationVector) ...
+%{[wp, re] = triangulate(pts_s20fe, pts_note8, ...
+    cameraMatrix(params_s20fe.cameraParams, params_s20fe.rotationMatrix, params_s20fe.translationVector), ...
+    cameraMatrix(params_note8.cameraParams, params_note8.rotationMatrix, params_note8.translationVector) ...
 );
-%}
+
 %%
 figure(4);
 hold on;
