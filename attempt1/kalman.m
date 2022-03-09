@@ -8,8 +8,6 @@ params_s20fe = load("calibration/params/s20fe.mat");
 params_note8 = load("calibration/params/note8.mat");
 params_s20plus = load("calibration/params/s20plus.mat");
 
-%v1 = VideoReader('mydata/s20fe.mp4');
-%v2 = VideoReader('mydata/note8.mp4');
 v1 = VideoReader('videos/s20fe.mp4');
 v2 = VideoReader('videos/note8.mp4');
 v3 = VideoReader('videos/s20plus.mp4');
@@ -62,8 +60,8 @@ g = -9.81;
 dt = 1 / v1.FrameRate;
 mu_k0 = [5.485 11.89 1 0 0 0].';
 sigma_k0 = eye(6) * 100;
-Q = eye(6) * 0.1;
-R = eye(3);
+Q = eye(6);
+R = eye(3) * 0.1;
 A_k = [
     1 0 0 dt 0 0;
     0 1 0 0 dt 0;
@@ -94,16 +92,16 @@ while nframe <= v1.NumFrames
     
     figure(100); hold all;
     imshow(frame_s20fe);
-    draw_bbx(bbx1);
-%{
+    %draw_bbx(bbx1);
+
     figure(200); hold all;
     imshow(frame_note8);
-    draw_bbx(bbx2);
+    %draw_bbx(bbx2);
 
     figure(300); hold all;
     imshow(frame_s20plus);
-    draw_bbx(bbx3);
-%}
+    %draw_bbx(bbx3);
+
     buffer_idx = mod(index0, ransac_frames) + 1;
     triangulated_pts_count = 0;
 
@@ -121,7 +119,8 @@ while nframe <= v1.NumFrames
                 track = pointTrack([1; 2; 3], [p1; p2; p3]);
                 [wp, re] = triangulateMultiview(track, cameraPoses, intrinsics);
         
-                if re < 50 && (-5 <= wp(1) && wp(1) <= 15.97) && (0 <= wp(2) && wp(2) <= 23.58)
+                if re < 25 && (-5 <= wp(1) && wp(1) <= 15.97) && (0 <= wp(2) && wp(2) <= 23.58)
+                    disp(re);
                     triangulated_pts_count = triangulated_pts_count + 1;
                     points_buffer{buffer_idx}(triangulated_pts_count, :) = wp;
                 end
@@ -248,14 +247,19 @@ while nframe <= v1.NumFrames
         %surf(sigma_x, sigma_y, sigma_z, 'FaceAlpha',0.1);
     end
 
-    if lost_frames >= max_lost_frames
+    if lost_frames >= max_lost_frames || mu_k(2) < -1 || mu_k(2) > 24.58 || mu_k(1) < -1 || mu_k(1) > 11.97
         mu_k = mu_k0;
         sigma_k = sigma_k0;
     end
 
     % frame overlay
     proj1 = worldToImage(params_s20fe.cameraParams, params_s20fe.rotationMatrix, params_s20fe.translationVector, mu_k(1:3).');
+    proj2 = worldToImage(params_note8.cameraParams, params_note8.rotationMatrix, params_note8.translationVector, mu_k(1:3).');
+    proj3 = worldToImage(params_s20plus.cameraParams, params_s20plus.rotationMatrix, params_s20plus.translationVector, mu_k(1:3).');
+
     figure(100); hold all; plot(proj1(1), proj1(2), '.', 'MarkerSize', 20, 'Color', 'yellow');
+    figure(200); hold all; plot(proj2(1), proj2(2), '.', 'MarkerSize', 20, 'Color', 'yellow');
+    figure(300); hold all; plot(proj3(1), proj3(2), '.', 'MarkerSize', 20, 'Color', 'yellow');
 
     frame_buffer{index0+1, 1} = frame_s20fe;
     frame_buffer{index0+1, 2} = frame_note8;
