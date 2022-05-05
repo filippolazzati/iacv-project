@@ -13,9 +13,9 @@ figure;
 imshow(edges);
 %%
 figure; imshow(background);
-[H,o_pi,R] = hough(edges);
+[H,T,R] = hough(edges);
 P = houghpeaks(H, 8, 'threshold', .3*max(H(:)));
-hlines = houghlines(edges, o_pi, R, P, 'FillGap', 20, 'MinLength', 100);
+hlines = houghlines(edges, T, R, P, 'FillGap', 20, 'MinLength', 100);
 hold all;
 lines = nan(length(hlines), 3);
 for k = 1:length(hlines)

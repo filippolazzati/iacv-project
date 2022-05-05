@@ -21,11 +21,6 @@ v2 = VideoReader('videos/note8.mp4');
 v3 = VideoReader('videos/s20plus.mp4');
 videos = {v1; v2; v3};
 
-%{
-video_out = VideoWriter('out/overlay.avi');
-video_out.FrameRate = 60;
-%}
-
 % Compute background for each video
 frames1 = read(v1, [200 400]);
 frames2 = read(v2, [200 400]);
@@ -35,10 +30,10 @@ background1_bw = rgb2gray(median(frames1, 4));
 background2_bw = rgb2gray(median(frames2, 4));
 background3_bw = rgb2gray(median(frames3, 4));
 %%
-
 % Create 3D court figure
 field_fig = figure('Position', [10 10 1000 1000]);
 draw_court(field_fig, params_s20fe, params_note8, params_s20plus);
+
 legend_pts = [
     plot(NaN, NaN, '.', 'MarkerSize', 10, 'Color', 'yellow', 'DisplayName', 'Prediction with measurement');
     plot(NaN, NaN, '.', 'MarkerSize', 10, 'Color', 'red', 'DisplayName', 'Prediction only');
@@ -59,6 +54,14 @@ mask_thresh = 25; % Binary mask threshold
 
 nframe = init_frame_s20fe;
 
+% Structuring elements
+global strel_bg_sub
+global strel_frame_diff
+global strel_mask_dilate
+strel_bg_sub = strel('disk', 5);
+strel_frame_diff = strel('disk', 3);
+strel_mask_dilate = strel('disk', 2);
+
 % Initialize circular frame buffer for frame differencing
 frame_buffer_size = 8;
 frame_buffer = cell(frame_buffer_size, size(videos, 1));
@@ -67,6 +70,11 @@ for f = 1:frame_buffer_size
         frame_buffer{f, v} = rgb2gray(read(videos{v}, base_frame - frame_buffer_size + f - 1));
     end
 end
+
+% Triangulation settings
+wp_bounds_x = [-5, 15.97];
+wp_bounds_y = [0, 23.58];
+re_thresh = 25;
 
 % RANSAC
 ransac_frames = 10;
@@ -101,8 +109,6 @@ v = 0;
 v_samples = 0;
 last_wp = nan(3, 1);
 
-%open(video_out);
-
 while nframe <= v1.NumFrames
     index0 = nframe - init_frame_s20fe; % iteration number
 
@@ -115,19 +121,17 @@ while nframe <= v1.NumFrames
     [bbx2, centroids2] = ball_candidates(frame_note8, frame_buffer, index0, 2, background2_bw, mask_thresh);
     [bbx3, centroids3] = ball_candidates(frame_s20plus, frame_buffer, index0, 3, background3_bw, mask_thresh);
 
-   %{
-    figure(100); hold all;
-    imshow(frame_s20fe);
+    %figure(100); hold all;
+    %imshow(read(v1, nframe));
     %draw_bbx(bbx1);
 
-    figure(200); hold all;
-    imshow(frame_note8_rgb);
+    %figure(200); hold all;
+    %imshow(frame_note8);
     %draw_bbx(bbx2);
 
-    figure(300); hold all;
-    imshow(frame_s20plus);
+    %figure(300); hold all;
+    %imshow(frame_s20plus);
     %draw_bbx(bbx3);
-   %}
 
     point_buffer_idx = mod(index0, ransac_frames) + 1; % RANSAC point buffer index
     triangulated_pts_count = 0;
@@ -140,6 +144,7 @@ while nframe <= v1.NumFrames
     % Find all possible combinations of candidates within the frames
     % with a low reprojection error and within court bounds,
     % and add to the point buffer.
+    
     for c1 = 1:size(centroids1, 1)
         for c2 = 1:size(centroids2, 1)
             for c3 = 1:size(centroids3, 1)
@@ -150,7 +155,7 @@ while nframe <= v1.NumFrames
                 track = pointTrack([1; 2; 3], [p1; p2; p3]);
                 [wp, re] = triangulateMultiview(track, cameraPoses, intrinsics);
         
-                if re < 25 && (-5 <= wp(1) && wp(1) <= 15.97) && (0 <= wp(2) && wp(2) <= 23.58)
+                if re < re_thresh && in(wp(1), wp_bounds_x) && in(wp(2), wp_bounds_y)
                     triangulated_pts_count = triangulated_pts_count + 1;
                     points_buffer{point_buffer_idx}(triangulated_pts_count, :) = wp;
                 end
@@ -181,7 +186,7 @@ while nframe <= v1.NumFrames
         % Fit plane to points using RANSAC and keep inliers
         [plane, inlierIdx] = pcfitplane(pointCloud(all_pts(:, 1:3)), 0.05, [1 0 0], 40);
         inliers = all_pts(inlierIdx, :);
-    
+
         min_dist_to_pred = Inf;
         selected_point = nan(3, 1);
 
@@ -228,13 +233,6 @@ while nframe <= v1.NumFrames
             plot_color = 'yellow';
         end
         plot3(mu_k(1),mu_k(2),mu_k(3), '.', 'MarkerSize', 10, 'Color', plot_color);
-
-        %{
-        proj2 = worldToImage(params_note8.cameraParams, params_note8.rotationMatrix, params_note8.translationVector, mu_k(1:3).');
-        if proj2(1) > 15 && proj2(2) > 15
-            figure(200); hold all; rectangle('Position', [proj2(1) - 15, proj2(2) - 15, 30, 30], 'EdgeColor',plot_color,'LineWidth',2);
-        end
-        %}
     end
 
     % Calculate velocity between this frame and the previous frame
@@ -267,14 +265,9 @@ while nframe <= v1.NumFrames
 
     last_wp = mu_k(1:3);
 
-    %figure(200);
-    %writeVideo(video_out, getframe(gcf));
-
     nframe = nframe + 1;
     %pause(0.2);
 end
-
-%close(video_out);
 
 %% Functions
 
@@ -299,26 +292,42 @@ end
 function [bbx, cc] = ball_candidates(frame_bw, frame_buffer, index0, video_idx, background_bw, mask_thresh)
     % Find ball candidates in a frame using background subtraction,
     % frame differencing and morphological operations
+    global strel_bg_sub
+    global strel_frame_diff
+    global strel_mask_dilate
 
     % Background subtraction
-    bw_bg_sub = imclose(imabsdiff(frame_bw, background_bw), strel('disk', 5));
+    bw_bg_sub = imclose(imabsdiff(frame_bw, background_bw), strel_bg_sub);
     mask_bg_sub = bw_bg_sub > mask_thresh;
     mask_bg_sub = mask_bg_sub & ~bwareaopen(mask_bg_sub, 200);
+
+    figure;
+    imshow(frame_bw);
 
     % Frame differencing
     mask_frame_diff = ones(size(frame_bw, 1), size(frame_bw, 2));
     for df = [8, 6, 4]
         frame_idx = mod(index0 - df, size(frame_buffer, 1)) + 1;
         other_frame_bw = frame_buffer{frame_idx, video_idx};
-        bw_frame_diff = imclose(imabsdiff(frame_bw, other_frame_bw), strel('disk', 3));
+
+figure;
+imshow(other_frame_bw);
+
+        bw_frame_diff = imclose(imabsdiff(frame_bw, other_frame_bw), strel_frame_diff);
         mask_other_frame_diff = bw_frame_diff > mask_thresh;
         mask_other_frame_diff = mask_other_frame_diff & ~bwareaopen(mask_other_frame_diff, 200);
         mask_frame_diff = mask_frame_diff & mask_other_frame_diff;
     end
 
+    figure;
+    imshow(mask_frame_diff);
+
     % AND masks and return region properties
     mask_and = mask_bg_sub & mask_frame_diff;
-    mask_final = imdilate(mask_and, strel('disk', 2));
+    mask_final = imdilate(mask_and, strel_mask_dilate);
+
+    %figure;
+    %imshow([frame_bw,imbin2gray(mask_bg_sub),imbin2gray(mask_frame_diff),imbin2gray(mask_and),imbin2gray(mask_final)]);
 
     props = regionprops(mask_final, 'BoundingBox', 'Centroid');
     bbx = vertcat(props.BoundingBox);
@@ -340,6 +349,7 @@ function draw_court(field_fig, params_s20fe, params_note8, params_s20plus)
     % Draw tennis court and plot camera locations
     figure(field_fig);
     hold on;
+
     pcshow([[0 0], zeros(size([0 0],1),1)], 'red','VerticalAxisDir', 'up', 'MarkerSize', 5);
     
     plotCamera('Location', params_s20fe.location, 'Orientation', params_s20fe.orientation, 'Size', 0.2, 'Color', [1,0,0]);
@@ -367,12 +377,17 @@ function draw_court(field_fig, params_s20fe, params_note8, params_s20plus)
         5.485  5.485  23.28  23.78;
     ];
     
-    plot(fieldSegs(:, 1:2).', fieldSegs(:, 3:4).', 'Color', 'b')
+    plot(fieldSegs(:, 1:2).', fieldSegs(:, 3:4).', 'Color', '#777')
 end
 
 function res = imbin2rgb(img)
     % Convert binary image to RGB
     res = 255 * repmat(uint8(img), 1, 1, 3);
+end
+
+function res = imbin2gray(img)
+    % Convert binary image to BW
+    res = 255 * uint8(img);
 end
 
 function res = gray2rgb(img)
@@ -389,3 +404,6 @@ function r = in_rect_centered(pos, rect)
         pos(3) >= rect(3) - rect(6) && pos(3) <= rect(3) + rect(6);
 end
 
+function r = in(value, bounds)
+    r = bounds(1) <= value && value <= bounds(2);
+end
