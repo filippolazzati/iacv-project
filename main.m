@@ -26,6 +26,8 @@ frames1 = read(v1, [200 400]);
 frames2 = read(v2, [200 400]);
 frames3 = read(v3, [200 400]);
 
+background1 = median(frames1, 4);
+
 background1_bw = rgb2gray(median(frames1, 4));
 background2_bw = rgb2gray(median(frames2, 4));
 background3_bw = rgb2gray(median(frames3, 4));
@@ -65,9 +67,11 @@ strel_mask_dilate = strel('disk', 2);
 % Initialize circular frame buffer for frame differencing
 frame_buffer_size = 8;
 frame_buffer = cell(frame_buffer_size, size(videos, 1));
+frame_buffer_rgb = cell(frame_buffer_size, size(videos, 1));
 for f = 1:frame_buffer_size
     for v = 1:size(videos, 1)
-        frame_buffer{f, v} = rgb2gray(read(videos{v}, base_frame - frame_buffer_size + f - 1));
+        frame_buffer_rgb{f, v} = read(videos{v}, base_frame - frame_buffer_size + f - 1);
+        frame_buffer{f, v} = rgb2gray(frame_buffer_rgb{f, v});
     end
 end
 
@@ -112,18 +116,77 @@ last_wp = nan(3, 1);
 while nframe <= v1.NumFrames
     index0 = nframe - init_frame_s20fe; % iteration number
 
-    frame_s20fe = rgb2gray(read(v1, nframe));
-    frame_note8 = rgb2gray(read(v2, nframe+frame_delta_note8));
-    frame_s20plus = rgb2gray(read(v3, nframe+frame_delta_s20plus));
+    frame_s20fe_rgb = read(v1, nframe);
+    frame_s20fe = rgb2gray(frame_s20fe_rgb);
+    frame_note8_rgb = read(v2, nframe+frame_delta_note8);
+    frame_note8 = rgb2gray(frame_note8_rgb);
+    frame_s20plus_rgb = read(v3, nframe+frame_delta_s20plus);
+    frame_s20plus = rgb2gray(frame_s20plus_rgb);
 
     % Find ball candidates for all frames
     [bbx1, centroids1] = ball_candidates(frame_s20fe, frame_buffer, index0, 1, background1_bw, mask_thresh);
-    [bbx2, centroids2] = ball_candidates(frame_note8, frame_buffer, index0, 2, background2_bw, mask_thresh);
-    [bbx3, centroids3] = ball_candidates(frame_s20plus, frame_buffer, index0, 3, background3_bw, mask_thresh);
+    %[bbx2, centroids2] = ball_candidates(frame_note8, frame_buffer, index0, 2, background2_bw, mask_thresh);
+    %[bbx3, centroids3] = ball_candidates(frame_s20plus, frame_buffer, index0, 3, background3_bw, mask_thresh);
 
-    %figure(100); hold all;
-    %imshow(read(v1, nframe));
-    %draw_bbx(bbx1);
+    figure(100); hold all;
+    imshow(read(v1, nframe));
+    draw_bbx(bbx1);
+
+    if size(centroids1) > 1
+        frame_prev_idx = mod(index0 - 4, size(frame_buffer_rgb, 1)) + 1;
+
+        dp = double(frame_s20fe_rgb) - double(frame_buffer_rgb{frame_prev_idx, 1});
+
+        for c = 1:size(centroids1, 1)
+            figure(100);
+            text(centroids1(c, 1), centroids1(c,2), num2str(c), 'FontSize', 20, 'Color', 'y');
+            
+            N = zeros([121 3]);
+            cx = round(centroids1(c, 1));
+            cy = round(centroids1(c, 2));
+            for dx = 0:10
+                for dy = 0:10
+                    px = cx + dx - 5;
+                    py = cy + dy - 5;
+                    dpi = reshape(dp(py, px, :), [1 3]);
+                    bgi = double(reshape(background1(py, px, :), [1 3]));
+                    N(dx * 11 + dy + 1, :) = cross(dpi, bgi);
+                    %figure(100); hold all; plot(px, py, '.');
+                end
+            end
+
+            [U, S, ~] = svd(N.' * N);
+
+            obj = U(:, 3);
+            [~, obj_norm_idx] = max(abs(obj));
+            obj_norm = obj ./ obj(obj_norm_idx);
+            
+            a = figure;
+            C = zeros([100 255 3]);
+            for x = 1:255
+                for y = 1:100
+                    for i = 1:3
+                        C(y, x, :) = round(obj_norm .* x);
+                    end
+                end
+            end
+            C=uint8(C);
+            hold on;
+            title(strcat( num2str(c), ': ', num2str(obj_norm(1)),', ',num2str(obj_norm(2)),', ',num2str(obj_norm(3)), ' -- ', num2str(S(1,1)/S(3,3))));
+            imshow(C);
+        end
+    end
+
+    % Add frame to buffer
+    frame_buffer{index0+1, 1} = frame_s20fe;
+    frame_buffer{index0+1, 2} = frame_note8;
+    frame_buffer{index0+1, 3} = frame_s20plus;
+
+    frame_buffer_rgb{index0+1, 1} = frame_s20fe_rgb;
+    frame_buffer_rgb{index0+1, 2} = frame_note8_rgb;
+    frame_buffer_rgb{index0+1, 3} = frame_s20plus_rgb;
+    nframe = nframe + 1;
+    continue;
 
     %figure(200); hold all;
     %imshow(frame_note8);
@@ -263,6 +326,10 @@ while nframe <= v1.NumFrames
     frame_buffer{index0+1, 2} = frame_note8;
     frame_buffer{index0+1, 3} = frame_s20plus;
 
+    frame_buffer_rgb{index0+1, 1} = frame_s20fe_rgb;
+    frame_buffer_rgb{index0+1, 2} = frame_note8_rgb;
+    frame_buffer_rgb{index0+1, 3} = frame_s20plus_rgb;
+
     last_wp = mu_k(1:3);
 
     nframe = nframe + 1;
@@ -301,26 +368,17 @@ function [bbx, cc] = ball_candidates(frame_bw, frame_buffer, index0, video_idx, 
     mask_bg_sub = bw_bg_sub > mask_thresh;
     mask_bg_sub = mask_bg_sub & ~bwareaopen(mask_bg_sub, 200);
 
-    figure;
-    imshow(frame_bw);
-
     % Frame differencing
     mask_frame_diff = ones(size(frame_bw, 1), size(frame_bw, 2));
     for df = [8, 6, 4]
         frame_idx = mod(index0 - df, size(frame_buffer, 1)) + 1;
         other_frame_bw = frame_buffer{frame_idx, video_idx};
 
-figure;
-imshow(other_frame_bw);
-
         bw_frame_diff = imclose(imabsdiff(frame_bw, other_frame_bw), strel_frame_diff);
         mask_other_frame_diff = bw_frame_diff > mask_thresh;
         mask_other_frame_diff = mask_other_frame_diff & ~bwareaopen(mask_other_frame_diff, 200);
         mask_frame_diff = mask_frame_diff & mask_other_frame_diff;
     end
-
-    figure;
-    imshow(mask_frame_diff);
 
     % AND masks and return region properties
     mask_and = mask_bg_sub & mask_frame_diff;
