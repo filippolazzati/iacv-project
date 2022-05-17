@@ -138,42 +138,97 @@ while nframe <= v1.NumFrames
         dp = double(frame_s20fe_rgb) - double(frame_buffer_rgb{frame_prev_idx, 1});
 
         for c = 1:size(centroids1, 1)
+if c ==1
+    continue
+end
+
             figure(100);
             text(centroids1(c, 1), centroids1(c,2), num2str(c), 'FontSize', 20, 'Color', 'y');
             
-            N = zeros([121 3]);
             cx = round(centroids1(c, 1));
             cy = round(centroids1(c, 2));
-            for dx = 0:10
-                for dy = 0:10
-                    px = cx + dx - 5;
-                    py = cy + dy - 5;
+
+            k = 8;
+            N = zeros([k*k 3]);
+            for dx = 0:k
+                for dy = 0:k
+                    px = cx + dx - k/2;
+                    py = cy + dy - k/2;
                     dpi = reshape(dp(py, px, :), [1 3]);
                     bgi = double(reshape(background1(py, px, :), [1 3]));
-                    N(dx * 11 + dy + 1, :) = cross(dpi, bgi);
-                    %figure(100); hold all; plot(px, py, '.');
+                    N(dx * (k+1) + dy + 1, :) = cross(dpi, bgi);
+                    figure(100); hold all; plot(px, py, '.');
                 end
             end
 
-            [U, S, ~] = svd(N.' * N);
+            Nt = N.';
+
+            if 0==1 && c == 2
+                l = ceil(sqrt(size(Nt, 2)));
+                out = nan([256*l 256*l 3]);
+
+                for i = 1:size(Nt, 2)
+                    fx = mod(i - 1, l);
+                    fy = floor((i-1) / l);
+                    for r = 0:255
+                        for g = 0:255
+                            b=uint8((r*Nt(1,i)+g*Nt(2,i))/-Nt(3,i));
+                            out(256*fx+r+1,256*fy+g+1,:) = [r g b];
+                        end
+                    end
+                end
+
+                figure;
+                imshow(uint8(out));
+            end
+
+            figure;
+            view(3);
+            grid on;
+            hold all;
+            xlabel('R');
+            ylabel('G');
+            zlabel('B');
+            xlim([0 256]);
+            ylim([0 256]);
+            zlim([0 256]);
+            h=gca;
+            plot3(h.XLim, [0 0], [0 0], 'r')
+            plot3([0, 0], h.YLim, [0 0], 'g');
+            plot3([0, 0], [0 0], h.ZLim, 'b');
+            plot3(0, 0, 0, '.', 'MarkerSize', 30);
+            for i = 1:size(Nt, 2)
+                [~, rescale_idx] = max(abs(Nt(:, i)));
+                ni = Nt(:, i) ./ Nt(rescale_idx, i);
+                [x, y] = meshgrid(0:255, 0:255);
+                z = (ni(1)*x + ni(2)*y)/-ni(3);
+
+                surf(x, y, z, cat(3, x, y, uint8(z)), 'EdgeColor', 'none');
+            end
+
+            [U, S, V] = svd(Nt * Nt.');
 
             obj = U(:, 3);
             [~, obj_norm_idx] = max(abs(obj));
             obj_norm = obj ./ obj(obj_norm_idx);
             
-            a = figure;
             C = zeros([100 255 3]);
             for x = 1:255
+                color = round(obj_norm .* x);
                 for y = 1:100
                     for i = 1:3
-                        C(y, x, :) = round(obj_norm .* x);
+                        C(y, x, :) = color;
                     end
                 end
             end
+            color = round(obj_norm .* 255);
+            plot3([0 color(1)], [0 color(2)], [0 color(3)], 'Color', '#fff', 'LineWidth', 3); %line
             C=uint8(C);
+            figure;
             hold on;
             title(strcat( num2str(c), ': ', num2str(obj_norm(1)),', ',num2str(obj_norm(2)),', ',num2str(obj_norm(3)), ' -- ', num2str(S(1,1)/S(3,3))));
             imshow(C);
+            continue;
         end
     end
 
