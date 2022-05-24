@@ -148,16 +148,44 @@ end
             cx = round(centroids1(c, 1));
             cy = round(centroids1(c, 2));
 
+            figure;
+            view(3);
+            grid on;
+            hold all;
+            xlabel('R');
+            ylabel('G');
+            zlabel('B');
+            xlim([0 256]);
+            ylim([0 256]);
+            zlim([0 256]);
+            h=gca;
+            plot3(h.XLim, [0 0], [0 0], 'r')
+            plot3([0, 0], h.YLim, [0 0], 'g');
+            plot3([0, 0], [0 0], h.ZLim, 'b');
+            plot3(0, 0, 0, '.', 'MarkerSize', 30);
+
             k = 8;
             N = zeros([k*k 3]);
             for dx = 0:k
                 for dy = 0:k
                     px = cx + dx - k/2;
                     py = cy + dy - k/2;
-                    dpi = reshape(dp(py, px, :), [1 3]);
-                    bgi = double(reshape(background1(py, px, :), [1 3]));
+                    bgi = double(reshape(background1(py, px, :), [1 3])); % bg color at pixel i
+                    dpi = double(reshape(frame_s20fe_rgb(py, px, :), [1 3])) - bgi; % delta between frame and bg at pixel i
                     N(dx * (k+1) + dy + 1, :) = cross(dpi, bgi);
-                    figure(100); hold all; plot(px, py, '.');
+                    %figure(100); hold all; plot(px, py, '.');
+                    
+                    alpha = 0.5:0.01:1; % alpha
+                    r = (p(1)-bgi(1))./alpha + bgi(1);
+                    g = (p(2)-bgi(2))./alpha + bgi(2);
+                    b = (p(3)-bgi(3))./alpha + bgi(3);
+
+                    for i = 1:size(r, 2)
+                        if r(i) >= 0 && r(i) <= 255 && g(i) >= 0 && g(i) <= 255 && b(i) >= 0 && b(i) <= 255
+                            plot3(r(i),g(i),b(i), '.', 'Color', double([r(i) g(i) b(i)])./256);
+                        end
+                    end
+                    continue;
                 end
             end
 
@@ -182,7 +210,7 @@ end
                 imshow(uint8(out));
             end
 
-            figure;
+            figure(21);
             view(3);
             grid on;
             hold all;
@@ -206,6 +234,10 @@ end
                 surf(x, y, z, cat(3, x, y, uint8(z)), 'EdgeColor', 'none');
             end
 
+            % si intersecano esattamente nello sfondo perchè 
+            % tutti i piani hanno lo stesso vettore direttore che è
+            % proprio quello dello sfondo
+
             [U, S, V] = svd(Nt * Nt.');
 
             obj = U(:, 3);
@@ -221,8 +253,8 @@ end
                     end
                 end
             end
-            color = round(obj_norm .* 255);
-            plot3([0 color(1)], [0 color(2)], [0 color(3)], 'Color', '#fff', 'LineWidth', 3); %line
+            
+            plot3([0 color(1)], [0 color(2)], [0 color(3)], 'Color', '#000', 'LineWidth', 3); %line
             C=uint8(C);
             figure;
             hold on;
